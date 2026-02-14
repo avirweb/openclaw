@@ -8,6 +8,7 @@ import type { InlineDirectives } from "./directive-handling.js";
 import type { createModelSelectionState } from "./model-selection.js";
 import type { TypingController } from "./typing.js";
 import { resolveSessionAuthProfileOverride } from "../../agents/auth-profiles/session-override.js";
+import { resolveThinkingAwareModelRef } from "../../agents/model-selection-thinking.js";
 import {
   abortEmbeddedPiRun,
   isEmbeddedPiRunActive,
@@ -130,8 +131,8 @@ export async function runPreparedReply(
     blockReplyChunking,
     resolvedBlockStreamingBreak,
     modelState,
-    provider,
-    model,
+    provider: baseProvider,
+    model: baseModel,
     perMessageQueueMode,
     perMessageQueueOptions,
     typing,
@@ -157,6 +158,8 @@ export async function runPreparedReply(
     execOverrides,
     abortedLastRun,
   } = params;
+  let provider = baseProvider;
+  let model = baseModel;
   let currentSystemSent = systemSent;
 
   const isFirstTurnInSession = isNewSession || !currentSystemSent;
@@ -273,6 +276,16 @@ export async function runPreparedReply(
   if (!resolvedThinkLevel) {
     resolvedThinkLevel = await modelState.resolveDefaultThinkingLevel();
   }
+
+  const thinkingAwareRef = resolveThinkingAwareModelRef({
+    provider,
+    model,
+    thinkingLevel: resolvedThinkLevel,
+    allowedModelKeys: modelState.allowedModelKeys,
+  });
+  provider = thinkingAwareRef.provider;
+  model = thinkingAwareRef.model;
+
   if (resolvedThinkLevel === "xhigh" && !supportsXHighThinking(provider, model)) {
     const explicitThink = directives.hasThinkDirective && directives.thinkLevel !== undefined;
     if (explicitThink) {
